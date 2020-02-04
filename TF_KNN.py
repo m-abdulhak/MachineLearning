@@ -2,16 +2,14 @@ import sys
 import numpy as np
 import operator
 import matplotlib.pyplot as plt
-
-print ("This is the name of the script: ", sys.argv[0])
-print ("Number of arguments: ", len(sys.argv))
-print ("The arguments are: " , str(sys.argv))
+from scipy.stats import spearmanr 
 
 ######################
 ### Handling files ###
 ######################
 
 def getDataInputs(fileName):
+    """ Retrieves the data inputs from the provided file """
     dataInputs = {}
     with open(fileName) as f:
         for line in f:
@@ -20,6 +18,8 @@ def getDataInputs(fileName):
     return dataInputs
 
 def getTrainingDataOutputs(fileName):
+    """ Retrieves the data outputs from the provided file"""
+
     trainingDataOutputs = {}
     headerArray = []
     with open(fileName) as f:
@@ -36,6 +36,7 @@ def getTrainingDataOutputs(fileName):
     return trainingDataOutputs
 
 def cleanSeqNames(seqNamesArray):
+    """ Removes ' and \" characters from the start and end of a sequence name """
     cleanedSeqNames = []
     for seqName in seqNamesArray:
         cleanedSeqName = seqName[1:] if seqName[0]=="'" or seqName[0]=="\"" else seqName
@@ -65,7 +66,7 @@ def getTrainingSet(inputsFileName,outputsFileName):
 def writeToFile(outputDataSet):
     """ Write the output data set to a file """
     # Set output file name
-    outputFileName = "out.txt"
+    outputFileName = "output.txt"
 
     # Open output file to start writing
     with open(outputFileName, 'w') as f:
@@ -94,24 +95,71 @@ def writeToFile(outputDataSet):
 ### KNN Functions  ###
 ######################
 
-def calculateOutputVectorUsingKNN(newInstance,trainingObservations):
+def performKNNUsingFiles(k,inputsFileName,outputsFileName, unseenInstancesFileName):
+    """ Performs the K Nearest Neighbor algorithm using the provided K and the training data provided in the inputs and outputs files
+        on the instances provided in the unseen instances file, and saves the resulting output vectors in an 'output.txt' file """
+    
+    # Only used when trying to find the best K
+    allCoef = []
+    allP = []
+
+    # Get the training data set from the files
+    # DataSet is a dictionary with 'inputs', 'outputs' keys
+    trainingObservations = getTrainingSet(inputsFileName,outputsFileName)
+
+    # Get the unseen instances from the files
+    # Example: {'Alx3': 'RRNRTTFSTFQLEELEKVFQKTHYPDVYAREQLALRTDLTEARVQVWFQNRRAKWRK', ...}
+    unseenInstances = getDataInputs(unseenInstancesFileName)
+
+    # Define output dataset containing the names and calculated output vectors for all unseen instances 
+    # Example: {'Alx3': [1.1,3.01,2,0.44,..........................], ...}
+    outputDataSet = {}
+
+    # Calculate output for each unseen instance
+    for instanceName in unseenInstances:
+        outputDataSet[instanceName] = calculateOutputVectorUsingKNN(k,unseenInstances[instanceName],trainingObservations)
+        
+        # For performance testing, when trying to find the best k 
+        # Real output values of unseen instances must exist in training dataset for comparison (but wont be used during training)
+        if(testPerformanceOverKRange==1):
+            iCoef,iP = spearmanr(outputDataSet[instanceName],trainingObservations['outputs'][instanceName])
+            allCoef.append(iCoef)
+            allP.append(iP)
+
+    writeToFile(outputDataSet)
+
+    if(testPerformanceOverKRange == 1):
+        return np.mean(allCoef), np.mean(allP)
+    else:
+        return -1,-1
+
+def calculateOutputVectorUsingKNN(k,newInstance,trainingObservations):
+    # Calculate the distances between the new instance and all instances in the training set
     distances = calcInstanceObsDistances(newInstance,trainingObservations)
-    kNearestNeighbors = getKMinDistances(k,distances)
+
+    # Find the k Nearest Neighbors corresponding to the k minimum distances 
+    kNearestNeighbors = getSeqOfKMinDistances(k,distances)
     displayDistances(distances,kNearestNeighbors)
     
+    # Generate the predicted output for the new instance as the mean of the output vector of the 
+    # k nearest neighbors corresponding to the k minimum distances
     instanceOutput = generateInstanceOutput(kNearestNeighbors,trainingObservations['outputs'])
     displayOutputVectors(instanceOutput,trainingObservations['outputs'],kNearestNeighbors)
 
     return instanceOutput
 
 def calcInstanceObsDistances(xi,obs):
+    """ Calculate the distances between the new instance Xi and all instances in the training set defined in 'obs'
+        Returns the a dictionary(sequence_name,distance) of the calculated sequences  """
     distances = {}
+
     for indx, o in enumerate(obs['inputs']):
-        distances[o] = calcDistance(xi,obs['inputs'][o])
+        distances[o] = calcSpecialDistance(xi,obs['inputs'][o])
 
     return distances
 
 def calcDistance(x1,x2):
+    """ Calculates the Hamming distance between 2 strings as the Number of non-identical characters in the 2 sequences """
     length = np.minimum(len(x1),len(x2))
 
     distance = 0
@@ -121,29 +169,47 @@ def calcDistance(x1,x2):
     
     return distance
 
-def getKMinDistances(k,dict):
-    # the k minimum distances found in dict
+residuesList = [3, 5, 6, 25, 31, 44, 46, 47, 48, 50, 51, 53, 54, 55, 57]
+
+def calcSpecialDistance(x1,x2):
+    """ Calculates the distance between 2 sequences as the Number of non-identical characters over a set of 15 DNA-contacting amino acids.
+        These 15 residues are @ 3, 5, 6, 25, 31, 44, 46, 47, 48, 50, 51, 53, 54, 55 and 57 """
+
+    length = np.minimum(len(x1),len(x2))
+
+    distance = 0
+
+    for i in range(0,length):
+        distance += 1 if x1[i] != x2[i] and i+1 in residuesList else 0
+    
+    return distance
+
+def getSeqOfKMinDistances(k,distanceDict):
+    """ Returns the a dictionary(sequence_name,distance) corresponding to the k minimum distances found in 'distanceDict' """
+
+    # the k minimum distances found in distanceDict
     kMinDistances = {}
     # the maximum distance within the list 
     maxDistInKMin = 0
     # the key of the maximum distance within the list
     keyOfMaxDistInKMin = 0
     
-    for indx,x in enumerate(dict):
+    for indx,x in enumerate(distanceDict):
         if(len(kMinDistances)<k):
-            if(len(kMinDistances)==0 or dict[x]>maxDistInKMin):
-                maxDistInKMin = dict[x]
+            if(len(kMinDistances)==0 or distanceDict[x]>maxDistInKMin):
+                maxDistInKMin = distanceDict[x]
                 keyOfMaxDistInKMin = x
-            kMinDistances[x] = dict[x]
+            kMinDistances[x] = distanceDict[x]
         else:
-            if(dict[x]<maxDistInKMin):
+            if(distanceDict[x]<maxDistInKMin):
                 kMinDistances.pop(keyOfMaxDistInKMin)
-                kMinDistances[x] = dict[x]
+                kMinDistances[x] = distanceDict[x]
                 keyOfMaxDistInKMin = max(kMinDistances.items(), key=operator.itemgetter(1))[0]
-                maxDistInKMin = dict[keyOfMaxDistInKMin]
+                maxDistInKMin = distanceDict[keyOfMaxDistInKMin]
     return kMinDistances
 
 def generateInstanceOutput(kNearestNeighbors,trainingDataOutputs):
+    """ Calculate the predicted output as the mean of the output vectors of the k nearest neighbors"""
     output = [0] * len(trainingDataOutputs[list(kNearestNeighbors)[0]])
     k = len(kNearestNeighbors)
 
@@ -159,6 +225,7 @@ def generateInstanceOutput(kNearestNeighbors,trainingDataOutputs):
 ################################
 
 def displayDistances(distances,kNearestNeighbors):
+    """ Displays all distances in gray and the selected k nearest distances in red"""
     if(displayGraphs):
         # Get the current Axes instance on the current figure
         ax = plt.gca()
@@ -172,6 +239,8 @@ def displayDistances(distances,kNearestNeighbors):
         plt.show()
 
 def displayOutputVectors(outputVector,trainingOutputs,kNearestNeighbors):
+    """ Dispalys the full training set output vectors (in grey), the k nearest neighbors output vectors (in green)
+        and the predicted new instance output vector (in red) """
     if(displayGraphs):
         # Get the current Axes instance on the current figure
         ax = plt.gca()
@@ -195,26 +264,38 @@ def displayOutputVectors(outputVector,trainingOutputs,kNearestNeighbors):
 # Set whether to display graphs showing distances and output vectors for each unseen instance
 displayGraphs = 0
 
-# Set the number of nearest neighbors to use
-k = 100
+# set whether to do performance testing over a range of k instead of using 1 k 
+testPerformanceOverKRange = 0
 
-# get the file names from command-line arguments passed to the script
-inputsFileName,outputsFileName, unseenInstancesFileName = getFileNamesFromArguments()
+if ( testPerformanceOverKRange == 0 ):
+    # Set the number of nearest neighbors to use
+    k = 8
 
-# Get the training data set from the files
-# DataSet is a dictionary with 'inputs', 'outputs' keys
-trainingObservations = getTrainingSet(inputsFileName,outputsFileName)
+    # Get the file names from command-line arguments passed to the script
+    inputsFileName,outputsFileName, unseenInstancesFileName = getFileNamesFromArguments()
 
-# Get the unseen instances from the files
-# Example: {'Alx3': 'RRNRTTFSTFQLEELEKVFQKTHYPDVYAREQLALRTDLTEARVQVWFQNRRAKWRK', ...}
-unseenInstances = getDataInputs(unseenInstancesFileName)
+    # Perform KNN algorithm
+    performKNNUsingFiles(k,inputsFileName,outputsFileName, unseenInstancesFileName)
 
-# Define output dataset containing the names and calculated output vectors for all unseen instances 
-# Example: {'Alx3': [1.1,3.01,2,0.44,..........................], ...}
-outputDataSet = {}
+else:
+    coef = []
+    p = []
 
-# Calculate output for each unseen instance
-for instanceName in unseenInstances:
-    outputDataSet[instanceName] = calculateOutputVectorUsingKNN(unseenInstances[instanceName],trainingObservations)
+    for i in range(3,25):
+        # Set the number of nearest neighbors to use
+        k = i
 
-writeToFile(outputDataSet)
+        # get the file names from command-line arguments passed to the script
+        inputsFileName,outputsFileName, unseenInstancesFileName = getFileNamesFromArguments()
+
+        coefMean,pMean = performKNNUsingFiles(k,inputsFileName,outputsFileName, unseenInstancesFileName)
+
+        coef.append(coefMean)
+        p.append(pMean)
+
+    # Get the current Axes instance on the current figure
+    ax = plt.gca()
+    print(coef,p)
+    plt.plot(coef,'lightgrey')
+    plt.plot(p,'lightgreen')
+    plt.show()
