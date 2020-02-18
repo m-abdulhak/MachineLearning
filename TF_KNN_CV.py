@@ -3,6 +3,8 @@ import numpy as np
 import operator
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr 
+import random
+import math
 
 ######################
 ### Handling files ###
@@ -45,9 +47,9 @@ def cleanSeqNames(seqNamesArray):
     return cleanedSeqNames
 
 def getFileNamesFromArguments():
-    """ Returns the file names of TrainingDataInputs, TrainingDataOutputs, and UnseesSequences 
-        from from command-line arguments passed to the script at locations 1,2, and 3 """
-    return str(sys.argv[1]), str(sys.argv[2]), str(sys.argv[3])
+    """ Returns the file names of TrainingDataInputs, TrainingDataOutputs 
+        from from command-line arguments passed to the script at locations 1 and 2 """
+    return str(sys.argv[1]), str(sys.argv[2])
 
 def getTrainingSet(inputsFileName,outputsFileName):
     """ Returns the training data set containing the trainig inputs and outputs extracted from the selected files
@@ -95,21 +97,17 @@ def writeToFile(outputDataSet):
 ### KNN Functions  ###
 ######################
 
-def performKNNUsingFiles(k,inputsFileName,outputsFileName, unseenInstancesFileName):
-    """ Performs the K Nearest Neighbor algorithm using the provided K and the training data provided in the inputs and outputs files
-        on the instances provided in the unseen instances file, and saves the resulting output vectors in an 'output.txt' file """
-    
-    # Only used when trying to find the best K
-    allCoef = []
-    allP = []
+def performKNNUsingKandDataSet(k,dataset,testInstances):
+    """ Performs the K Nearest Neighbor algorithm using the provided K and the training data provided
+        on the instances provided in the testInstances, and returns the set of resulting output vectors """
 
     # Get the training data set from the files
     # DataSet is a dictionary with 'inputs', 'outputs' keys
-    trainingObservations = getTrainingSet(inputsFileName,outputsFileName)
+    trainingObservations = dataset
 
     # Get the unseen instances from the files
     # Example: {'Alx3': 'RRNRTTFSTFQLEELEKVFQKTHYPDVYAREQLALRTDLTEARVQVWFQNRRAKWRK', ...}
-    unseenInstances = getDataInputs(unseenInstancesFileName)
+    unseenInstances = testInstances
 
     # Define output dataset containing the names and calculated output vectors for all unseen instances 
     # Example: {'Alx3': [1.1,3.01,2,0.44,..........................], ...}
@@ -118,20 +116,8 @@ def performKNNUsingFiles(k,inputsFileName,outputsFileName, unseenInstancesFileNa
     # Calculate output for each unseen instance
     for instanceName in unseenInstances:
         outputDataSet[instanceName] = calculateOutputVectorUsingKNN(k,unseenInstances[instanceName],trainingObservations)
-        
-        # For performance testing, when trying to find the best k 
-        # Real output values of unseen instances must exist in training dataset for comparison (but wont be used during training)
-        if(testPerformanceOverKRange==1):
-            iCoef,iP = spearmanr(outputDataSet[instanceName],trainingObservations['outputs'][instanceName])
-            allCoef.append(iCoef)
-            allP.append(iP)
 
-    writeToFile(outputDataSet)
-
-    if(testPerformanceOverKRange == 1):
-        return np.mean(allCoef), np.mean(allP)
-    else:
-        return -1,-1
+    return outputDataSet
 
 def calculateOutputVectorUsingKNN(k,newInstance,trainingObservations):
     # Calculate the distances between the new instance and all instances in the training set
@@ -139,12 +125,12 @@ def calculateOutputVectorUsingKNN(k,newInstance,trainingObservations):
 
     # Find the k Nearest Neighbors corresponding to the k minimum distances 
     kNearestNeighbors = getSeqOfKMinDistances(k,distances)
-    displayDistances(distances,kNearestNeighbors)
+    #displayDistances(distances,kNearestNeighbors)
     
     # Generate the predicted output for the new instance as the mean of the output vector of the 
     # k nearest neighbors corresponding to the k minimum distances
     instanceOutput = generateInstanceOutput(kNearestNeighbors,trainingObservations['outputs'])
-    displayOutputVectors(instanceOutput,trainingObservations['outputs'],kNearestNeighbors)
+    #displayOutputVectors(instanceOutput,trainingObservations['outputs'],kNearestNeighbors)
 
     return instanceOutput
 
@@ -154,7 +140,7 @@ def calcInstanceObsDistances(xi,obs):
     distances = {}
 
     for indx, o in enumerate(obs['inputs']):
-        distances[o] = calcSpecialDistance(xi,obs['inputs'][o])
+        distances[o] = calcDistance(xi,obs['inputs'][o])
 
     return distances
 
@@ -258,44 +244,132 @@ def displayOutputVectors(outputVector,trainingOutputs,kNearestNeighbors):
 
 
 ################################
-###     Start of Script      ###
+###    Data Manipulation     ###
 ################################
 
-# Set whether to display graphs showing distances and output vectors for each unseen instance
-displayGraphs = 0
+def devideInputsOfDataset(inputs,V):
+    inputsList = list(inputs.keys())
+    
+    random.shuffle(inputsList)
 
-# set whether to do performance testing over a range of k instead of using 1 k 
-testPerformanceOverKRange = 0
+    lengthOfFold = math.floor(len(inputsList)/V)
+    
+    folds = {}
+    for r in range(0,V):
+        folds[r] = []
 
-if ( testPerformanceOverKRange == 0 ):
-    # Set the number of nearest neighbors to use
-    k = 8
+    for i in range(0,len(inputsList)):
+        folds[math.floor(i/lengthOfFold)].append(inputsList[i])
 
-    # Get the file names from command-line arguments passed to the script
-    inputsFileName,outputsFileName, unseenInstancesFileName = getFileNamesFromArguments()
+    #for indx in range(0,len(folds)):
+        #print("Fold: ",indx,"length: ",len(folds[indx]),"Values: ",folds[indx])
 
-    # Perform KNN algorithm
-    performKNNUsingFiles(k,inputsFileName,outputsFileName, unseenInstancesFileName)
+    return folds
 
-else:
-    coef = []
-    p = []
+def concatFoldsExcept(folds,idexToExclude):
+    newArray = []
+    for i in range(0,len(folds)):
+        if (i!=idexToExclude):
+            newArray += folds[i];
 
-    for i in range(3,25):
-        # Set the number of nearest neighbors to use
-        k = i
+    return newArray
 
-        # get the file names from command-line arguments passed to the script
-        inputsFileName,outputsFileName, unseenInstancesFileName = getFileNamesFromArguments()
+def generateSubDataSet(dataset,inputsToKeep):
+    newDataset = {}
+    newDataset['outputs'] = dataset['outputs']
+    newDataset['inputs'] = {k:v for k,v in dataset['inputs'].items() if k in inputsToKeep}
+    #print("Old:",len(dataset['inputs']),dataset['inputs'])
+    #print("\n=========================================================================================\n")
+    #print("New:",len(newDataset['inputs']),newDataset['inputs'])
+    return newDataset
 
-        coefMean,pMean = performKNNUsingFiles(k,inputsFileName,outputsFileName, unseenInstancesFileName)
+def calculateSpearmannForOutputs(dataset,outputs):
+    allCoef = []
+    allP = []
 
-        coef.append(coefMean)
-        p.append(pMean)
+    for instanceName in outputs:        
+        iCoef,iP = spearmanr(outputs[instanceName],dataset['outputs'][instanceName])
+        allCoef.append(iCoef)
 
-    # Get the current Axes instance on the current figure
-    ax = plt.gca()
-    print(coef,p)
-    plt.plot(coef,'lightgrey')
-    plt.plot(p,'lightgreen')
-    plt.show()
+    return np.mean(allCoef)
+
+def getKeyOfMaxValue(dict):
+    return max(dict, key=lambda k: dict[k])
+
+################################################################
+###   Start of grid-search k-fold cross-validation Script    ###
+################################################################
+
+# get file names of inputs and outputs files
+inputsFileName,outputsFileName = getFileNamesFromArguments()
+
+# Generate a dataset using these instances, generated dataset will be of 
+# a dictionary with 'inputs', 'outputs' keys: {'inputs':trainingDataInputs,'outputs':trainingDataOutputs} Where:
+# inputs is a dictionry with key, values pairs of sequence names and sequence values: 
+# {'Alx3': 'RRNRTTFSTFQLEELEKVFQKTHYPDVYAREQLALRTDLTEARVQVWFQNRRAKWRK', ...}
+# Outputs is a dictionry with key, values pairs of sequence names and output vectors
+# Example: {'Alx3': [1.1,3.01,2,0.44,..........................], ...}
+dataset = getTrainingSet(inputsFileName,outputsFileName)
+
+# Set Nexp (the number of times to repeat k-fold process)
+Nexp = 5
+
+# Set the number of sub-sets to divide training data (v is the k in k-fold name)
+V = 5
+
+# Set the range of K (as in K-nearest neighbor) to perform k-fold on
+kRange = range(3,13)
+
+# Define set to hold the mean of spearmann correlation for each k in each step in Nexp
+# means[k] = [mean1,mean2,mean3,....,meanNexp]
+means = {} 
+for k in kRange:
+    means[k] = []
+
+# Repeat k-fold process Nexp Times
+for n in range(0,Nexp):
+    # Divide dataset into V folds (V subsets) pseudo-randomly
+    folds = devideInputsOfDataset(dataset['inputs'],V)
+
+    # Define set of dictionaries to hold outputs for each k
+    outputs = {}
+    for k in kRange:
+        outputs[k] = {}
+
+    # Repeat *** process V times (one time for each fold)
+    for i in range(0,V):
+        # Set the training set L from all folds except the i-th folds
+        inputsOfL = concatFoldsExcept(folds,i)
+        L = generateSubDataSet(dataset,inputsOfL)
+
+        # Set the test set T as the i-th folds
+        # Example: {'Alx3': 'RRNRTTFSTFQLEELEKVFQKTHYPDVYAREQLALRTDLTEARVQVWFQNRRAKWRK', ...}
+        T = {k:v for k,v in dataset['inputs'].items() if k in folds[i]}
+
+        # For every k in kRange 
+        for k in kRange:
+            #print(k,outputs[k])
+            outputs[k].update(performKNNUsingKandDataSet(k,L,T))
+
+
+    # By now we have a set of output dictionaries for each k defined as outputs[k]
+    # Each contains one output vector for each instance i in the full dataset D
+    # We can now calculate the spearmann correlation for each k and add it to the means dictionary
+    for k in kRange:
+        #means[k] = [] if lens(means[k])<1 else means[k]
+        means[k].append(calculateSpearmannForOutputs(dataset,outputs[k]))
+        print(n,k,means[k])
+
+# Calculate the means of the means of spearmann values for each k calculated over Nexp setps
+# meanOfMeans = {k1:valueOfMeanOfMeansOfk1,k2:valueOfMeanOfMeansOfk1,....}
+meanOfMeans = {}
+
+for k in kRange:
+    meanOfMeans[k] = np.mean(means[k])
+
+print(meanOfMeans)
+
+bestK = getKeyOfMaxValue(meanOfMeans)
+
+print("Best K:",bestK,"Spearmann:",meanOfMeans[bestK])
+
