@@ -144,32 +144,6 @@ def calcInstanceObsDistances(xi,obs):
 
     return distances
 
-def calcDistance(x1,x2):
-    """ Calculates the Hamming distance between 2 strings as the Number of non-identical characters in the 2 sequences """
-    length = np.minimum(len(x1),len(x2))
-
-    distance = 0
-
-    for i in range(0,length):
-        distance += 1 if x1[i] != x2[i] else 0
-    
-    return distance
-
-residuesList = [3, 5, 6, 25, 31, 44, 46, 47, 48, 50, 51, 53, 54, 55, 57]
-
-def calcSpecialDistance(x1,x2):
-    """ Calculates the distance between 2 sequences as the Number of non-identical characters over a set of 15 DNA-contacting amino acids.
-        These 15 residues are @ 3, 5, 6, 25, 31, 44, 46, 47, 48, 50, 51, 53, 54, 55 and 57 """
-
-    length = np.minimum(len(x1),len(x2))
-
-    distance = 0
-
-    for i in range(0,length):
-        distance += 1 if x1[i] != x2[i] and i+1 in residuesList else 0
-    
-    return distance
-
 def getSeqOfKMinDistances(k,distanceDict):
     """ Returns the a dictionary(sequence_name,distance) corresponding to the k minimum distances found in 'distanceDict' """
 
@@ -205,6 +179,36 @@ def generateInstanceOutput(kNearestNeighbors,trainingDataOutputs):
             #print(trainingDataOutputs[seq][i])
 
     return output
+
+################################
+###    Distance Functions    ###
+################################
+
+def calcDistance(x1,x2):
+    """ Calculates the Hamming distance between 2 strings as the Number of non-identical characters in the 2 sequences """
+    length = np.minimum(len(x1),len(x2))
+
+    distance = 0
+
+    for i in range(0,length):
+        distance += 1 if x1[i] != x2[i] else 0
+    
+    return distance
+
+residuesList = [3, 5, 6, 25, 31, 44, 46, 47, 48, 50, 51, 53, 54, 55, 57]
+
+def calcSpecialDistance(x1,x2):
+    """ Calculates the distance between 2 sequences as the Number of non-identical characters over a set of 15 DNA-contacting amino acids.
+        These 15 residues are @ 3, 5, 6, 25, 31, 44, 46, 47, 48, 50, 51, 53, 54, 55 and 57 """
+
+    length = np.minimum(len(x1),len(x2))
+
+    distance = 0
+
+    for i in range(0,length):
+        distance += 1 if x1[i] != x2[i] and i+1 in residuesList else 0
+    
+    return distance
 
 ################################
 ### Visulaization Functions  ###
@@ -300,6 +304,64 @@ def getKeyOfMaxValue(dict):
 ###   Start of grid-search k-fold cross-validation Script    ###
 ################################################################
 
+def performCrossValidation(dataset,Nexp,V,kRange):   
+    # Define set to hold the mean of spearmann correlation for each k in each step in Nexp
+    # means[k] = [mean1,mean2,mean3,....,meanNexp]
+    means = {} 
+    for k in kRange:
+        means[k] = []
+
+    # Repeat k-fold process Nexp Times
+    for n in range(0,Nexp):
+        # Divide dataset into V folds (V subsets) pseudo-randomly
+        folds = devideInputsOfDataset(dataset['inputs'],V)
+
+        # Define set of dictionaries to hold outputs for each k
+        outputs = {}
+        for k in kRange:
+            outputs[k] = {}
+
+        # Repeat *** process V times (one time for each fold)
+        for i in range(0,V):
+            # Set the training set L from all folds except the i-th folds
+            inputsOfL = concatFoldsExcept(folds,i)
+            L = generateSubDataSet(dataset,inputsOfL)
+
+            # Set the test set T as the i-th folds
+            # Example: {'Alx3': 'RRNRTTFSTFQLEELEKVFQKTHYPDVYAREQLALRTDLTEARVQVWFQNRRAKWRK', ...}
+            T = {k:v for k,v in dataset['inputs'].items() if k in folds[i]}
+
+            # For every k in kRange 
+            for k in kRange:
+                #print(k,outputs[k])
+                outputs[k].update(performKNNUsingKandDataSet(k,L,T))
+
+
+        # By now we have a set of output dictionaries for each k defined as outputs[k]
+        # Each contains one output vector for each instance i in the full dataset D
+        # We can now calculate the spearmann correlation for each k and add it to the means dictionary
+        for k in kRange:
+            #means[k] = [] if lens(means[k])<1 else means[k]
+            means[k].append(calculateSpearmannForOutputs(dataset,outputs[k]))
+            #print(n,k,means[k])
+
+    # Calculate the means of the means of spearmann values for each k calculated over Nexp setps
+    # meanOfMeans = {k1:valueOfMeanOfMeansOfk1,k2:valueOfMeanOfMeansOfk1,....}
+    meanOfMeans = {}
+    stdOfMeans = {}
+
+    for k in kRange:
+        meanOfMeans[k] = np.mean(means[k])
+        stdOfMeans[k] = np.std(means[k])
+
+    bestK = getKeyOfMaxValue(meanOfMeans)
+
+    return bestK, meanOfMeans, stdOfMeans
+
+################################################################
+###   Start of grid-search k-fold cross-validation Script    ###
+################################################################
+
 # get file names of inputs and outputs files
 inputsFileName,outputsFileName = getFileNamesFromArguments()
 
@@ -312,64 +374,17 @@ inputsFileName,outputsFileName = getFileNamesFromArguments()
 dataset = getTrainingSet(inputsFileName,outputsFileName)
 
 # Set Nexp (the number of times to repeat k-fold process)
-Nexp = 5
+Nexp = 1
 
 # Set the number of sub-sets to divide training data (v is the k in k-fold name)
 V = 5
 
 # Set the range of K (as in K-nearest neighbor) to perform k-fold on
-kRange = range(3,13)
+kRange = range(3,10)
 
-# Define set to hold the mean of spearmann correlation for each k in each step in Nexp
-# means[k] = [mean1,mean2,mean3,....,meanNexp]
-means = {} 
-for k in kRange:
-    means[k] = []
+bestK, meansForKs, stdForKs = performCrossValidation(dataset,Nexp,V,kRange)
 
-# Repeat k-fold process Nexp Times
-for n in range(0,Nexp):
-    # Divide dataset into V folds (V subsets) pseudo-randomly
-    folds = devideInputsOfDataset(dataset['inputs'],V)
-
-    # Define set of dictionaries to hold outputs for each k
-    outputs = {}
-    for k in kRange:
-        outputs[k] = {}
-
-    # Repeat *** process V times (one time for each fold)
-    for i in range(0,V):
-        # Set the training set L from all folds except the i-th folds
-        inputsOfL = concatFoldsExcept(folds,i)
-        L = generateSubDataSet(dataset,inputsOfL)
-
-        # Set the test set T as the i-th folds
-        # Example: {'Alx3': 'RRNRTTFSTFQLEELEKVFQKTHYPDVYAREQLALRTDLTEARVQVWFQNRRAKWRK', ...}
-        T = {k:v for k,v in dataset['inputs'].items() if k in folds[i]}
-
-        # For every k in kRange 
-        for k in kRange:
-            #print(k,outputs[k])
-            outputs[k].update(performKNNUsingKandDataSet(k,L,T))
-
-
-    # By now we have a set of output dictionaries for each k defined as outputs[k]
-    # Each contains one output vector for each instance i in the full dataset D
-    # We can now calculate the spearmann correlation for each k and add it to the means dictionary
-    for k in kRange:
-        #means[k] = [] if lens(means[k])<1 else means[k]
-        means[k].append(calculateSpearmannForOutputs(dataset,outputs[k]))
-        print(n,k,means[k])
-
-# Calculate the means of the means of spearmann values for each k calculated over Nexp setps
-# meanOfMeans = {k1:valueOfMeanOfMeansOfk1,k2:valueOfMeanOfMeansOfk1,....}
-meanOfMeans = {}
-
-for k in kRange:
-    meanOfMeans[k] = np.mean(means[k])
-
-print(meanOfMeans)
-
-bestK = getKeyOfMaxValue(meanOfMeans)
-
-print("Best K:",bestK,"Spearmann:",meanOfMeans[bestK])
-
+print("Nexp:",Nexp,"V:",V,"k-range:",kRange)
+print("Means Of Means:", meansForKs)
+print("STDs Of Means:", stdForKs)
+print("Best K:",bestK,"Corresponding Spearmann:",meansForKs[bestK])
