@@ -97,7 +97,7 @@ def writeToFile(outputDataSet):
 ### KNN Functions  ###
 ######################
 
-def performKNNUsingKandDataSet(k,dataset,testInstances):
+def performKNNUsingKandDataSet(k,dataset,testInstances,distanceFunction):
     """ Performs the K Nearest Neighbor algorithm using the provided K and the training data provided
         on the instances provided in the testInstances, and returns the set of resulting output vectors """
 
@@ -115,13 +115,13 @@ def performKNNUsingKandDataSet(k,dataset,testInstances):
 
     # Calculate output for each unseen instance
     for instanceName in unseenInstances:
-        outputDataSet[instanceName] = calculateOutputVectorUsingKNN(k,unseenInstances[instanceName],trainingObservations)
+        outputDataSet[instanceName] = calculateOutputVectorUsingKNN(k,unseenInstances[instanceName],trainingObservations,distanceFunction)
 
     return outputDataSet
 
-def calculateOutputVectorUsingKNN(k,newInstance,trainingObservations):
+def calculateOutputVectorUsingKNN(k,newInstance,trainingObservations,distanceFunction):
     # Calculate the distances between the new instance and all instances in the training set
-    distances = calcInstanceObsDistances(newInstance,trainingObservations)
+    distances = calcInstanceObsDistances(newInstance,trainingObservations,distanceFunction)
 
     # Find the k Nearest Neighbors corresponding to the k minimum distances 
     kNearestNeighbors = getSeqOfKMinDistances(k,distances)
@@ -134,13 +134,13 @@ def calculateOutputVectorUsingKNN(k,newInstance,trainingObservations):
 
     return instanceOutput
 
-def calcInstanceObsDistances(xi,obs):
+def calcInstanceObsDistances(xi,obs,distanceFunction):
     """ Calculate the distances between the new instance Xi and all instances in the training set defined in 'obs'
         Returns the a dictionary(sequence_name,distance) of the calculated sequences  """
     distances = {}
 
     for indx, o in enumerate(obs['inputs']):
-        distances[o] = calcDistance(xi,obs['inputs'][o])
+        distances[o] = distanceFunction(xi,obs['inputs'][o])
 
     return distances
 
@@ -304,7 +304,7 @@ def getKeyOfMaxValue(dict):
 ###   Start of grid-search k-fold cross-validation Script    ###
 ################################################################
 
-def performCrossValidation(dataset,Nexp,V,kRange):   
+def performCrossValidation(dataset,Nexp,V,kRange,distanceFunction):   
     # Define set to hold the mean of spearmann correlation for each k in each step in Nexp
     # means[k] = [mean1,mean2,mean3,....,meanNexp]
     means = {} 
@@ -334,7 +334,7 @@ def performCrossValidation(dataset,Nexp,V,kRange):
             # For every k in kRange 
             for k in kRange:
                 #print(k,outputs[k])
-                outputs[k].update(performKNNUsingKandDataSet(k,L,T))
+                outputs[k].update(performKNNUsingKandDataSet(k,L,T,distanceFunction))
 
 
         # By now we have a set of output dictionaries for each k defined as outputs[k]
@@ -374,17 +374,21 @@ inputsFileName,outputsFileName = getFileNamesFromArguments()
 dataset = getTrainingSet(inputsFileName,outputsFileName)
 
 # Set Nexp (the number of times to repeat k-fold process)
-Nexp = 1
+Nexp = 5
 
 # Set the number of sub-sets to divide training data (v is the k in k-fold name)
 V = 5
 
 # Set the range of K (as in K-nearest neighbor) to perform k-fold on
-kRange = range(3,10)
+kRange = range(3,14)
 
-bestK, meansForKs, stdForKs = performCrossValidation(dataset,Nexp,V,kRange)
+# Define Distance Functions
+distFuncs = [calcDistance,calcSpecialDistance]
 
-print("Nexp:",Nexp,"V:",V,"k-range:",kRange)
-print("Means Of Means:", meansForKs)
-print("STDs Of Means:", stdForKs)
-print("Best K:",bestK,"Corresponding Spearmann:",meansForKs[bestK])
+for dF in distFuncs:
+    bestK, meansForKs, stdForKs = performCrossValidation(dataset,Nexp,V,kRange,dF)
+    print("DISTANCE FUNCTION:",dF.__name__)
+    print("Nexp:",Nexp,"V:",V,"k-range:",kRange)
+    print("Means Of Means:", meansForKs)
+    print("STDs Of Means:", stdForKs)
+    print("Best K:",bestK,"Corresponding Spearmann:",meansForKs[bestK])
