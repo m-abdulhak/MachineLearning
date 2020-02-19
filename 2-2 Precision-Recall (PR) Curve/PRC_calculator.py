@@ -16,8 +16,8 @@ def getObservations(fileName):
     observations = []
     with open(fileName) as f:
         for line in f:
-           key, val = line.split()
-           observations.append((key,val)) 
+           conf, RealClass = line.split()
+           observations.append([float(conf),int(RealClass),0]) 
     return observations
 
 def getFileNameFromArguments():
@@ -26,13 +26,52 @@ def getFileNameFromArguments():
     return str(sys.argv[1])
 
 ############################
+###   Helper Functions   ###
+############################
+
+def intDiv(num1,num2):
+    return math.floor(num1/num2)
+
+def getLastIndexOfObsWithConfidanceLessThan(obs,threshold):
+    if(threshold<=obs[0][0]):
+        return -1
+
+    if(threshold>=obs[-1][0]):
+        return len(obs)-1
+
+    low = 0
+    high = len(obs)-1
+    index = intDiv(low+high,2)
+    count = 0
+    while(not(obs[index][0]<threshold and obs[index+1][0]>=threshold) and count<10000):
+        print("@",index,"Obs[index]=",obs[index][0],"Obs[index+1]=",obs[index+1][0],"Threshold=",threshold,"Condition:",(obs[index][0]<threshold and obs[index+1][0]>=threshold))
+        if(obs[index][0]>=threshold):
+            high = index
+        else:
+            low = index
+        index = intDiv((low+high),2)
+        count += 1
+
+    return index
+
+
+
+############################
 ### Calculate Parameters ###
 ############################
 
 def trueClassCounts(obs):
-    TruePositives = sum(map(lambda x : x[1]=='1', obs))
+    TruePositives = sum(map(lambda x : x[1]==1, obs))
     TrueNegatives = len(obs)-TruePositives
     return TruePositives,TrueNegatives
+
+def setPredictions(obs,threshold):
+    lastNegativeIndex = getLastIndexOfObsWithConfidanceLessThan(obs,threshold)
+    for i in range(0,len(obs)):
+        obs[i][2] = 1 if i>lastNegativeIndex else 0
+
+    return obs
+        
 
 ################################################
 ###   Start Precision-Recall Curve Script    ###
@@ -41,8 +80,17 @@ def trueClassCounts(obs):
 # get file names of inputs and outputs files
 observationsFile = getFileNameFromArguments()
 
-observations = getObservations(observationsFile)
+obs = getObservations(observationsFile)
 
-observations.sort(key=itemgetter(0))
+obs.sort(key=itemgetter(0))
 
-print(trueClassCounts(observations))
+print(len(obs),trueClassCounts(obs))
+
+threshold = 0
+
+index = getLastIndexOfObsWithConfidanceLessThan(obs,threshold)
+
+print(index)
+
+print(setPredictions(obs,0))
+#print("@",index,"Obs[index]=",obs[index][0],"Obs[index+1]=",obs[index+1][0],"Threshold=",threshold,"Condition:",(obs[index][0]<threshold and obs[index+1][0]>=threshold))
