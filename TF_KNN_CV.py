@@ -93,6 +93,49 @@ def writeToFile(outputDataSet):
             # End of line
             f.write('\n')
 
+def writeCVToFile(means,stds):
+    """ Write the output data set to a file """
+    # Set output file name
+    outputFileName = "model_selection_table.txt"
+
+    # Open output file to start writing
+    with open(outputFileName, 'w') as f:
+        # Get list of the sequence names of all output instances
+        distFuncList = list(means)
+        kList = list(means[distFuncList[0]])
+
+        # Write sequence names of all output instances in output file header row
+        for i in range(0,len(distFuncList)):     
+            f.write('\t'+"D"+str(i+1))
+
+        # Get length of output vector generated for each instance - 1 for rows loop indexing 
+        numberOfKs =  len(means[distFuncList[0]])
+
+        # For each row in an output vector
+        for i in range(0,numberOfKs):   
+            # New line
+            f.write('\n')  
+            # On line i: for each sequence in sequence list
+            curK = kList[i];
+            f.write("K="+str(curK))
+            for j in distFuncList:
+                # Write the i-th value in its output vector + tab seperator
+                f.write('\t'+str(np.around(means[j][curK], decimals=4))+pm+str(np.around(stds[j][curK], decimals=4)))
+
+        bestD = 0
+        bestK = getKeyOfMaxValue(means[distFuncList[bestD]])
+        bestKSpearmannValue = means[distFuncList[bestD]][bestK]
+        for i in range(1,len(distFuncList)):
+            d = distFuncList[i]
+            curBestK = getKeyOfMaxValue(means[d])
+            curBestKSpearmanValue = means[d][curBestK]
+            if(curBestK>bestK):
+                bestD = i
+                bestK = curBestK
+                bestKSpearmannValue = curBestKSpearmanValue
+
+        f.write("\nModel chosen: K="+str(bestK)+", D"+str(bestD+1))
+
 ######################
 ### KNN Functions  ###
 ######################
@@ -358,6 +401,7 @@ def performCrossValidation(dataset,Nexp,V,kRange,distanceFunction):
 
     return bestK, meanOfMeans, stdOfMeans
 
+pm = u'\u00b1'
 ################################################################
 ###   Start of grid-search k-fold cross-validation Script    ###
 ################################################################
@@ -374,7 +418,7 @@ inputsFileName,outputsFileName = getFileNamesFromArguments()
 dataset = getTrainingSet(inputsFileName,outputsFileName)
 
 # Set Nexp (the number of times to repeat k-fold process)
-Nexp = 5
+Nexp = 3
 
 # Set the number of sub-sets to divide training data (v is the k in k-fold name)
 V = 5
@@ -385,10 +429,19 @@ kRange = range(3,14)
 # Define Distance Functions
 distFuncs = [calcDistance,calcSpecialDistance]
 
+# Define Perofrmance Measurements Dictionary
+means = {}
+stds = {}
+
 for dF in distFuncs:
     bestK, meansForKs, stdForKs = performCrossValidation(dataset,Nexp,V,kRange,dF)
-    print("DISTANCE FUNCTION:",dF.__name__)
-    print("Nexp:",Nexp,"V:",V,"k-range:",kRange)
-    print("Means Of Means:", meansForKs)
-    print("STDs Of Means:", stdForKs)
-    print("Best K:",bestK,"Corresponding Spearmann:",meansForKs[bestK])
+    means[dF.__name__] = meansForKs
+    stds[dF.__name__] = stdForKs
+
+#for p in means:
+#    print(p)
+#    for k in means[p]:
+#        print("k=",k,means[p][k],pm,stds[p][k])
+
+writeCVToFile(means,stds)
+
