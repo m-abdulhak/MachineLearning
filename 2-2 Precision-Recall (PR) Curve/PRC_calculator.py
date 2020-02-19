@@ -54,8 +54,6 @@ def getLastObsIndexWithConfidanceLessThan(obs,threshold):
 
     return index
 
-
-
 ############################
 ### Calculate Parameters ###
 ############################
@@ -92,6 +90,19 @@ def calcParameters(obs):
                 TN += 1
 
     return TP, FP, FN, TN
+
+def calcPrecisionRecallPairs(obs,thresholdStep):
+    threshold = 0
+    recallPrecisionThresholdList = []
+    while threshold<1:
+        obs = setPredictions(obs,threshold)
+        TP, FP, FN, TN = calcParameters(obs)
+        precision = np.float64(TP) / (TP + FP)
+        recall = np.float64(TP) / (TP + FN)
+        recallPrecisionThresholdList.append((precision,recall,threshold))
+        threshold += thresholdStep
+
+    return recallPrecisionThresholdList
         
 
 ################################################
@@ -114,3 +125,5 @@ setPredictions(obs,threshold)
 
 
 print(calcParameters(obs),sum(calcParameters(obs)))
+
+print(calcPrecisionRecallPairs(obs,0.05))
