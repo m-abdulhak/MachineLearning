@@ -32,7 +32,7 @@ def getFileNameFromArguments():
 def intDiv(num1,num2):
     return math.floor(num1/num2)
 
-def getLastIndexOfObsWithConfidanceLessThan(obs,threshold):
+def getLastObsIndexWithConfidanceLessThan(obs,threshold):
     if(threshold<=obs[0][0]):
         return -1
 
@@ -66,11 +66,32 @@ def trueClassCounts(obs):
     return TruePositives,TrueNegatives
 
 def setPredictions(obs,threshold):
-    lastNegativeIndex = getLastIndexOfObsWithConfidanceLessThan(obs,threshold)
+    lastNegativeIndex = getLastObsIndexWithConfidanceLessThan(obs,threshold)
     for i in range(0,len(obs)):
         obs[i][2] = 1 if i>lastNegativeIndex else 0
 
     return obs
+
+def calcParameters(obs):
+    TP = 0
+    FP = 0
+    TN = 0
+    FN = 0
+    for i in range(0,len(obs)):
+        trueClass = obs[i][1]
+        predictedClass = obs[i][2]
+        if predictedClass == 1:
+            if trueClass == 1: 
+                TP += 1
+            else:
+                FP +=1
+        else:
+            if trueClass == 1:
+                FN += 1
+            else:
+                TN += 1
+
+    return TP, FP, FN, TN
         
 
 ################################################
@@ -86,11 +107,10 @@ obs.sort(key=itemgetter(0))
 
 print(len(obs),trueClassCounts(obs))
 
-threshold = 0
+threshold = 0.5
 
-index = getLastIndexOfObsWithConfidanceLessThan(obs,threshold)
-
-print(index)
-
-print(setPredictions(obs,0))
+setPredictions(obs,threshold)
 #print("@",index,"Obs[index]=",obs[index][0],"Obs[index+1]=",obs[index+1][0],"Threshold=",threshold,"Condition:",(obs[index][0]<threshold and obs[index+1][0]>=threshold))
+
+
+print(calcParameters(obs),sum(calcParameters(obs)))
