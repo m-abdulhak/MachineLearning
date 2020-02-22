@@ -100,16 +100,27 @@ def calcPrecisionRecallPairs(obs,thresholdStep):
     """ Calculates the precision/recall pairs for the provided observations and threshold step """
     threshold = thresholdStep
     precisionRecallThresholdList = []
+
     while threshold<1:
         obs = setPredictions(obs,threshold)
         TP, FP, FN, TN = calcParameters(obs)
         precision = np.float64(TP) / (TP + FP)
         recall = np.float64(TP) / (TP + FN)
-        precisionRecallThresholdList.append((precision,recall,threshold))
+        if(recall>=0 and precision>=0):
+            precisionRecallThresholdList.append((precision,recall,threshold))
         threshold += thresholdStep
 
     return precisionRecallThresholdList
-        
+  
+def calcAUPRC(prPairs):
+    """ Calculates the the auprc value for the precision/recall pairs """
+    sum = 0
+    start,stop = 2,len(prPairs)-1
+    for i,(prec, rec, tr) in enumerate(prPairs[:stop-start],start):
+        (prevPrec, prevRec, tr) = prPairs[i-1]
+        sum += (rec-prevRec)*(prec+prevPrec)/2
+    return sum
+
 
 ################################################
 ###   Start Precision-Recall Curve Script    ###
@@ -127,6 +138,9 @@ obs.sort(key=itemgetter(0))
 # Calculate the precision/recall pairs
 prPairs = calcPrecisionRecallPairs(obs,0.001)
 
+# Calculate AUPRC
+auprc = calcAUPRC(prPairs)
+
 # Get the current Axes instance on the current figure
 ax = plt.gca()
 #ax.set_xticks(range(0,1,0.05))
@@ -136,5 +150,7 @@ ax = plt.gca()
 Xs = list(map(lambda tup: tup[1],prPairs))
 Ys = list(map(lambda tup: tup[0],prPairs))
 plt.plot(Xs, Ys)
+plt.suptitle('PR Curve (AUPRC =' + "{0:.2f}".format(auprc) + ')', fontsize=24)
+plt.xlabel('Recall', fontsize=18)
+plt.ylabel('Precision', fontsize=18)
 plt.savefig("PRC.png")
-
