@@ -6,6 +6,7 @@ from scipy.stats import spearmanr
 import random
 import math
 from operator import itemgetter
+import matplotlib.pyplot as plt
 
 ######################
 ### Handling files ###
@@ -21,8 +22,7 @@ def getObservations(fileName):
     return observations
 
 def getFileNameFromArguments():
-    """ Returns the file names of TrainingDataInputs, TrainingDataOutputs 
-        from from command-line arguments passed to the script at locations 1 and 2 """
+    """ Returns the file name passed as argument at locations 1 """
     return str(sys.argv[1])
 
 ############################
@@ -30,9 +30,11 @@ def getFileNameFromArguments():
 ############################
 
 def intDiv(num1,num2):
+    """ Integer Division OF num1 by num2 """
     return math.floor(num1/num2)
 
 def getLastObsIndexWithConfidanceLessThan(obs,threshold):
+    """ Returns the index of the last element that has a confidance levele less than the provided threshold """
     if(threshold<=obs[0][0]):
         return -1
 
@@ -44,7 +46,7 @@ def getLastObsIndexWithConfidanceLessThan(obs,threshold):
     index = intDiv(low+high,2)
     count = 0
     while(not(obs[index][0]<threshold and obs[index+1][0]>=threshold) and count<10000):
-        print("@",index,"Obs[index]=",obs[index][0],"Obs[index+1]=",obs[index+1][0],"Threshold=",threshold,"Condition:",(obs[index][0]<threshold and obs[index+1][0]>=threshold))
+        #print("@",index,"Obs[index]=",obs[index][0],"Obs[index+1]=",obs[index+1][0],"Threshold=",threshold,"Condition:",(obs[index][0]<threshold and obs[index+1][0]>=threshold))
         if(obs[index][0]>=threshold):
             high = index
         else:
@@ -59,11 +61,13 @@ def getLastObsIndexWithConfidanceLessThan(obs,threshold):
 ############################
 
 def trueClassCounts(obs):
+    """ Returns the count of the observations that are from calss 1 and class 0 """
     TruePositives = sum(map(lambda x : x[1]==1, obs))
     TrueNegatives = len(obs)-TruePositives
     return TruePositives,TrueNegatives
 
 def setPredictions(obs,threshold):
+    """ Sets the prediction value of the observations according to the provided threshold"""
     lastNegativeIndex = getLastObsIndexWithConfidanceLessThan(obs,threshold)
     for i in range(0,len(obs)):
         obs[i][2] = 1 if i>lastNegativeIndex else 0
@@ -71,6 +75,7 @@ def setPredictions(obs,threshold):
     return obs
 
 def calcParameters(obs):
+    """ Calculates the True/False Positives/Negatives parameters of the provided observations (must have their prediction values set) """
     TP = 0
     FP = 0
     TN = 0
@@ -92,17 +97,18 @@ def calcParameters(obs):
     return TP, FP, FN, TN
 
 def calcPrecisionRecallPairs(obs,thresholdStep):
-    threshold = 0
-    recallPrecisionThresholdList = []
+    """ Calculates the precision/recall pairs for the provided observations and threshold step """
+    threshold = thresholdStep
+    precisionRecallThresholdList = []
     while threshold<1:
         obs = setPredictions(obs,threshold)
         TP, FP, FN, TN = calcParameters(obs)
         precision = np.float64(TP) / (TP + FP)
         recall = np.float64(TP) / (TP + FN)
-        recallPrecisionThresholdList.append((precision,recall,threshold))
+        precisionRecallThresholdList.append((precision,recall,threshold))
         threshold += thresholdStep
 
-    return recallPrecisionThresholdList
+    return precisionRecallThresholdList
         
 
 ################################################
@@ -112,18 +118,23 @@ def calcPrecisionRecallPairs(obs,thresholdStep):
 # get file names of inputs and outputs files
 observationsFile = getFileNameFromArguments()
 
+# Extract Observations from file
 obs = getObservations(observationsFile)
 
+# Sort the observations according to their confidance levels
 obs.sort(key=itemgetter(0))
 
-print(len(obs),trueClassCounts(obs))
+# Calculate the precision/recall pairs
+prPairs = calcPrecisionRecallPairs(obs,0.001)
 
-threshold = 0.5
+# Get the current Axes instance on the current figure
+ax = plt.gca()
+#ax.set_xticks(range(0,1,0.05))
+#ax.set_yticks(range(0,1,0.05))
 
-setPredictions(obs,threshold)
-#print("@",index,"Obs[index]=",obs[index][0],"Obs[index+1]=",obs[index+1][0],"Threshold=",threshold,"Condition:",(obs[index][0]<threshold and obs[index+1][0]>=threshold))
+# Plot the precision/recall pairs
+Xs = list(map(lambda tup: tup[1],prPairs))
+Ys = list(map(lambda tup: tup[0],prPairs))
+plt.plot(Xs, Ys)
+plt.savefig("PRC.png")
 
-
-print(calcParameters(obs),sum(calcParameters(obs)))
-
-print(calcPrecisionRecallPairs(obs,0.05))

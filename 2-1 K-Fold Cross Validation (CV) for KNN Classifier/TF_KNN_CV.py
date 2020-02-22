@@ -418,7 +418,7 @@ inputsFileName,outputsFileName = getFileNamesFromArguments()
 dataset = getTrainingSet(inputsFileName,outputsFileName)
 
 # Set Nexp (the number of times to repeat k-fold process)
-Nexp = 3
+Nexp = 10
 
 # Set the number of sub-sets to divide training data (v is the k in k-fold name)
 V = 5
