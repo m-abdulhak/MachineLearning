@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import spearmanr 
 import random
 import math
+from operator import add
 
 ######################
 ### Handling files ###
@@ -370,7 +371,7 @@ def performCrossValidation(dataset,Nexp,V,kRange,distanceFunction):
         for k in kRange:
             outputs[k] = {}
 
-        # Repeat *** process V times (one time for each fold)
+        # Repeat process V times (one time for each fold)
         for i in range(0,V):
             # Set the training set L from all folds except the i-th folds
             inputsOfL = concatFoldsExcept(folds,i)
@@ -426,13 +427,13 @@ inputsFileName, outputsFileName = getFileNamesFromArguments()
 dataset = getTrainingSet(inputsFileName,outputsFileName)
 
 # Set Nexp (the number of times to repeat k-fold process)
-Nexp = 1
+Nexp = 3
 
 # Set the number of folds to divide training data into (v is the k in k-fold)
-V = 10
+V = 5
 
 # Set the range of K (as in K-nearest neighbor) to perform k-fold on
-kRange = range(3,13)
+kRange = range(1,25)
 
 # Define Distance Functions
 distFuncs = [calcDistance,calcSpecialDistance]
@@ -456,24 +457,36 @@ bestK, bestKSpearmannValue, bestD = writeCVToFile(means,stds)
 if plotOutput:
     X = {}
     Y = {}
-
+    YPSTD = {}
+    YMSTD = {}
     for dist in means:
         X[dist] = []
         Y[dist] = []
+        YPSTD[dist] = []
+        YMSTD[dist] = []
         for x in means[dist]:
             X[dist].append(x)
             Y[dist].append(means[dist][x])
-
+            YPSTD[dist].append(means[dist][x]+stds[dist][x])
+            YMSTD[dist].append(means[dist][x]-stds[dist][x])
     #print(means)
 
     ax = plt.gca()
+    plt.figure(num=None, figsize=(8, 6), dpi=180, facecolor='w', edgecolor='k')
 
-    plt.plot(X['calcDistance'],Y['calcDistance'],'grey')
-    plt.plot(X['calcSpecialDistance'],Y['calcSpecialDistance'],'blue')
-    plt.plot([bestK], [bestKSpearmannValue], marker='o', markersize=16, color = 'green')
+    plt.plot(X['calcDistance'],Y['calcDistance'],'grey', marker='.', label='D1')
+    plt.plot(X['calcDistance'],YPSTD['calcDistance'],'--', color = 'lightgrey', marker='.')
+    plt.plot(X['calcDistance'],YMSTD['calcDistance'],'--', color = 'lightgrey', marker='.')
 
-    plt.suptitle('Spearman Correlation Values for Number of Neighbours (K) and Distance Functions D1 (grey) and D2 (blue)', fontsize=16)
+    plt.plot(X['calcSpecialDistance'],Y['calcSpecialDistance'],'blue', marker='.', label='D2')
+    plt.plot(X['calcSpecialDistance'],YPSTD['calcSpecialDistance'],'--', color = 'lightblue', marker='.')
+    plt.plot(X['calcSpecialDistance'],YMSTD['calcSpecialDistance'],'--', color = 'lightblue', marker='.')
+
+
+    plt.plot([bestK], [bestKSpearmannValue], marker='o', markersize=16, color = 'green', label='Best Model')
+
+    plt.legend(loc="lower right")
+    plt.suptitle('K-Fold Cross Validation Results', fontsize=16)
     plt.xlabel('Number of neighbours (K)', fontsize=14)
     plt.ylabel('Spearman Correlation', fontsize=14)
-
-    plt.show()
+    plt.savefig("Nexp-{}_V-{}_K-Range-{}-{}.png".format(Nexp,V,min(kRange),max(kRange)))
