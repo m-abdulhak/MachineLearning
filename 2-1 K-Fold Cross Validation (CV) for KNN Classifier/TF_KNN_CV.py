@@ -123,18 +123,24 @@ def writeCVToFile(means,stds):
                 f.write('\t'+str(np.around(means[j][curK], decimals=4))+pm+str(np.around(stds[j][curK], decimals=4)))
 
         bestD = 0
-        bestK = getKeyOfMaxValue(means[distFuncList[bestD]])
-        bestKSpearmannValue = means[distFuncList[bestD]][bestK]
+        bestDistFunc = distFuncList[bestD]
+        bestK = getKeyOfMaxValue(means[bestDistFunc])
+        bestKSpearmannValue = means[bestDistFunc][bestK]
+
         for i in range(1,len(distFuncList)):
             d = distFuncList[i]
+
             curBestK = getKeyOfMaxValue(means[d])
             curBestKSpearmanValue = means[d][curBestK]
-            if(curBestK>bestK):
+
+            if(curBestKSpearmanValue>bestKSpearmannValue):
                 bestD = i
                 bestK = curBestK
                 bestKSpearmannValue = curBestKSpearmanValue
 
         f.write("\nModel chosen: K="+str(bestK)+", D"+str(bestD+1))
+
+        return bestK, bestKSpearmannValue, bestD
 
 ######################
 ### KNN Functions  ###
@@ -384,9 +390,7 @@ def performCrossValidation(dataset,Nexp,V,kRange,distanceFunction):
         # Each contains one output vector for each instance i in the full dataset D
         # We can now calculate the spearmann correlation for each k and add it to the means dictionary
         for k in kRange:
-            #means[k] = [] if lens(means[k])<1 else means[k]
             means[k].append(calculateSpearmannForOutputs(dataset,outputs[k]))
-            #print(n,k,means[k])
 
     # Calculate the means of the means of spearmann values for each k calculated over Nexp setps
     # meanOfMeans = {k1:valueOfMeanOfMeansOfk1,k2:valueOfMeanOfMeansOfk1,....}
@@ -406,8 +410,12 @@ pm = u'\u00b1'
 ###   Start of grid-search k-fold cross-validation Script    ###
 ################################################################
 
+# Set to 1 to plot performace of selected distance functions and number of neighbors
+# Currently only works for 2 distance functions
+plotOutput = 1
+
 # get file names of inputs and outputs files
-inputsFileName,outputsFileName = getFileNamesFromArguments()
+inputsFileName, outputsFileName = getFileNamesFromArguments()
 
 # Generate a dataset using these instances, generated dataset will be of 
 # a dictionary with 'inputs', 'outputs' keys: {'inputs':trainingDataInputs,'outputs':trainingDataOutputs} Where:
@@ -418,18 +426,18 @@ inputsFileName,outputsFileName = getFileNamesFromArguments()
 dataset = getTrainingSet(inputsFileName,outputsFileName)
 
 # Set Nexp (the number of times to repeat k-fold process)
-Nexp = 10
+Nexp = 1
 
-# Set the number of sub-sets to divide training data (v is the k in k-fold name)
-V = 5
+# Set the number of folds to divide training data into (v is the k in k-fold)
+V = 10
 
 # Set the range of K (as in K-nearest neighbor) to perform k-fold on
-kRange = range(3,14)
+kRange = range(3,13)
 
 # Define Distance Functions
 distFuncs = [calcDistance,calcSpecialDistance]
 
-# Define Perofrmance Measurements Dictionary
+# Define Perfrmance Measurements Dictionary
 means = {}
 stds = {}
 
@@ -443,5 +451,29 @@ for dF in distFuncs:
 #    for k in means[p]:
 #        print("k=",k,means[p][k],pm,stds[p][k])
 
-writeCVToFile(means,stds)
+bestK, bestKSpearmannValue, bestD = writeCVToFile(means,stds)
 
+if plotOutput:
+    X = {}
+    Y = {}
+
+    for dist in means:
+        X[dist] = []
+        Y[dist] = []
+        for x in means[dist]:
+            X[dist].append(x)
+            Y[dist].append(means[dist][x])
+
+    #print(means)
+
+    ax = plt.gca()
+
+    plt.plot(X['calcDistance'],Y['calcDistance'],'grey')
+    plt.plot(X['calcSpecialDistance'],Y['calcSpecialDistance'],'blue')
+    plt.plot([bestK], [bestKSpearmannValue], marker='o', markersize=16, color = 'green')
+
+    plt.suptitle('Spearman Correlation Values for Number of Neighbours (K) and Distance Functions D1 (grey) and D2 (blue)', fontsize=16)
+    plt.xlabel('Number of neighbours (K)', fontsize=14)
+    plt.ylabel('Spearman Correlation', fontsize=14)
+
+    plt.show()
