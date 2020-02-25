@@ -122,6 +122,19 @@ def calcAUPRC(prPairs):
     return sum
 
 
+def writeToFile(prtValues):
+    """ Write the output data set to a file """
+    # Set output file name
+    outputFileName = "PR_table.txt"
+
+    # Open output file to start writing
+    with open(outputFileName, 'w') as f:
+        for i in range(0,len(prtValues)):
+            triplet = prtValues[i]
+            f.write("{}\t{}\t{}".format(triplet[0],triplet[1],triplet[2]))
+            if(i<len(prtValues)-1):
+                f.write("\n")
+
 ################################################
 ###   Start Precision-Recall Curve Script    ###
 ################################################
@@ -137,6 +150,8 @@ obs.sort(key=itemgetter(0))
 
 # Calculate the precision/recall pairs
 prPairs = calcPrecisionRecallPairs(obs,0.001)
+
+writeToFile(prPairs)
 
 # Calculate AUPRC
 auprc = calcAUPRC(prPairs)
