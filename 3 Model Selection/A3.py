@@ -31,7 +31,7 @@ from sklearn.linear_model import RidgeCV, LassoCV, Ridge, Lasso
 print_progress = True
 
 # Set to True to plot performace of best models
-plot_output = False
+plot_output = True
 
 #############################
 ###   Helper Functions    ###
@@ -119,6 +119,51 @@ def get_best_classifier(grids):
 
     return best_model
 
+def generate_perf_table(classifiers):
+    names = []
+    means = []
+    stds = []
+
+    performance_table = []
+    performance_table.append(['============================='])
+    performance_table.append(['Best Model Per ML Method:'])
+    performance_table.append(['============================='])
+    performance_table.append(['Method','Mean','STD','Prameters'])
+
+    for c in classifiers:
+        #name = str(type(g.estimator)).split('.')[1]
+        g = c['grid']
+        name = c['name']
+        mean = g.best_score_
+        std = g.cv_results_['std_test_score'][g.best_index_]
+        params = str(g.best_params_)
+
+        performance_table.append([name,mean,std,params])
+
+        names.append(name)
+        means.append(mean)
+        stds.append(std)
+
+    pd.DataFrame(performance_table).to_csv("performance_table.txt", header=None, index=None,sep='\t')
+
+    # Create x-axis values
+    x_pos = np.arange(len(names))
+
+    # Build the plot
+    fig, ax = plt.subplots()
+    ax.bar(x_pos, means, yerr=stds, align='center', alpha=0.5, ecolor='black', capsize=10)
+    ax.set_ylabel('Average Precision Score')
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(names)
+    ax.set_title('Best Average Precision Score per ML Method')
+    ax.set_ylim(bottom=.8, top=.9)
+    ax.yaxis.grid(True)
+
+    # Save the figure and show
+    plt.tight_layout()
+    plt.savefig('bar_plot_with_error_bars.png')
+
+
 ############################################
 ###   Start of Model Selection Script    ###
 ############################################
@@ -162,49 +207,39 @@ x_to_predict = sc.transform(x_to_predict)
 # SVC
 # ‘linear’, ‘poly’, ‘rbf’, ‘sigmoid’, ‘precomputed’ 
 classifier_svc = svm.SVC()
-#params_grid_svc = [
-#  {'C': [.1, 1, 10, 100], 'kernel': ['linear']},
-#  {'C': [.1, 1, 10], 'degree': [2, 3, 4], 'kernel': ['poly']},
-#  {'C': [.1, 1, 10, 100], 'gamma': [0.001, 0.0001], 'kernel': ['rbf', 'sigmoid']},
-# ]
 params_grid_svc = [
-  {'C': [.1, 1], 'kernel': ['linear']}
-]
+  {'C': [.1, 1, 10, 100], 'kernel': ['linear']},
+  {'C': [.1, 1, 10], 'degree': [2, 3, 4], 'kernel': ['poly']},
+  {'C': [.1, 1, 10, 100], 'gamma': [0.001, 0.0001], 'kernel': ['rbf', 'sigmoid']},
+ ]
 
 # Random Forests
 classifier_rf = RandomForestClassifier()
-#params_grid_rf = { 
-#    'n_estimators': [200, 500, 1000],
-#    'max_features': ['auto', 'sqrt', 'log2'],
-#    'max_depth' : [4,5,6,7,8],
-#    'criterion' :['gini', 'entropy']
-#}
 params_grid_rf = { 
-    'n_estimators': [200, 500],
-    'max_features': ['auto'],
+    'n_estimators': [200, 500, 1000],
+    'max_features': ['auto', 'sqrt', 'log2'],
+    'max_depth' : [4,5,6,7,8],
+    'criterion' :['gini', 'entropy']
 }
 
 # Neural Network
 classifier_nn = MLPClassifier(max_iter=5000)
-#params_grid_nn = { 
-#    'hidden_layer_sizes': get_hidden_layer_sizes_param(),
-#    'activation': ['identity', 'logistic', 'tanh', 'relu'],
-#    'solver': ['lbfgs', 'sgd', 'adam'],
-#    'alpha' : [0.1, 0.01, 0.001, 0.0001, 0.0001],
-#    'learning_rate': ['constant', 'invscaling', 'adaptive']
-#}
 params_grid_nn = { 
-    'activation': ['identity', 'logistic'],
-    'solver': ['lbfgs']
+    'hidden_layer_sizes': get_hidden_layer_sizes_param(),
+    'activation': ['identity', 'logistic', 'tanh', 'relu'],
+    'solver': ['lbfgs', 'sgd', 'adam'],
+    'alpha' : [0.1, 0.01, 0.001, 0.0001, 0.0001],
+    'learning_rate': ['constant', 'invscaling', 'adaptive']
 }
 
 classifiers = [
-  {'classifier': classifier_svc, 'params': params_grid_svc, 'type': 'grid'},
-  {'classifier': classifier_rf, 'params': params_grid_rf, 'type': 'grid'},
-  {'classifier': classifier_nn, 'params': params_grid_nn, 'type': 'random'}
+  {'classifier': classifier_svc, 'params': params_grid_svc, 'type': 'grid', 'name': "SVM"},
+  {'classifier': classifier_rf, 'params': params_grid_rf, 'type': 'grid', 'name': "Random Forests"},
+  {'classifier': classifier_nn, 'params': params_grid_nn, 'type': 'random', 'name': "Neural Network"}
 ]
 
 grids = []
+names = []
 
 for c in classifiers:
     classifier = c['classifier']
@@ -236,14 +271,20 @@ for c in classifiers:
     printP('TP={}\tFP={}'.format(tp,fp))
     printP('FN={}\tTN={}'.format(fn,tn))
 
-    average_precision = average_precision_score(y_test, y_score)
-    disp = plot_precision_recall_curve(grid, X_test, y_test)
-    disp.ax_.set_title('2-class Precision-Recall curve: AP={0:0.8f}'.format(average_precision))
-    plt.savefig("{}-PRC.png".format(str(type(grid.estimator)).split('.')[1]))
+    if(plot_output):
+        average_precision = average_precision_score(y_test, y_score)
+        disp = plot_precision_recall_curve(grid, X_test, y_test)
+        disp.ax_.set_title('2-class Precision-Recall curve: AP={0:0.8f}'.format(average_precision))
+        plt.savefig("{}-PRC.png".format(c['name']))
 
     grids.append(grid)
+    c['grid']=grid
 
-# Get best model anduse it to perform prediction 
+# Generate best models performance measurements table
+if(plot_output):
+    generate_perf_table(classifiers)
+
+# Get best model and use it to perform prediction 
 best_model = get_best_classifier(grids)
 predict_proba = get_grid_preditions(best_model,x_to_predict)
 printP(predict_proba)

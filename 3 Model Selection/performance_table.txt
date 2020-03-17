@@ -1,0 +1,7 @@
+=============================			
+Best Model Per ML Method:			
+=============================			
+Method	Mean	STD	Prameters
+SVM	0.8319024552276642	0.006447980013758431	{'C': 1, 'kernel': 'linear'}
+Random Forests	0.827141774599672	0.007212010127874389	{'max_features': 'auto', 'n_estimators': 500}
+Neural Network	0.8318354396117209	0.007007747749096281	{'solver': 'lbfgs', 'activation': 'identity'}
