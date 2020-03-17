@@ -83,18 +83,18 @@ def get_hidden_layer_sizes_param():
     return hidden_layer_sizes
 
 def print_search_summary(grid):
-    print('------------------------------------------------------------------------------------')
+    printP('------------------------------------------------------------------------------------')
     results = pd.DataFrame.from_dict(grid.cv_results_).sort_values(by=['rank_test_score'])
-    print('cv_results_',results[["params","mean_test_score","std_test_score","rank_test_score"]])
-    print('------------------------------------------------------------------------------------')
-    print('best_estimator:',grid.best_estimator_)
-    print('------------------------------------------------------------------------------------')
-    print('best_score:',grid.best_score_)
-    print('------------------------------------------------------------------------------------')
-    print('best_params:',grid.best_params_)
-    print('------------------------------------------------------------------------------------')
-    print('refit_time:',grid.refit_time_)
-    print('------------------------------------------------------------------------------------')
+    printP('cv_results_',results[["params","mean_test_score","std_test_score","rank_test_score"]])
+    printP('------------------------------------------------------------------------------------')
+    printP('best_estimator:',grid.best_estimator_)
+    printP('------------------------------------------------------------------------------------')
+    printP('best_score:',grid.best_score_)
+    printP('------------------------------------------------------------------------------------')
+    printP('best_params:',grid.best_params_)
+    printP('------------------------------------------------------------------------------------')
+    printP('refit_time:',grid.refit_time_)
+    printP('------------------------------------------------------------------------------------')
 
 def get_grid_preditions(grid,x):
     """ Returns the predictions for class '1' """
@@ -124,10 +124,14 @@ def get_best_classifier(grids):
 ############################################
 
 # Get file names of inputs and outputs files
-training_set_filename, test_set_filename = getFileNamesFromArguments()
+training_set_filename, to_predict_set_filename = getFileNamesFromArguments()
 
-# Import training set and extract features and outputs for all instances to x and y
+
+# Import training and to_preditct set 
 train_set = pd.read_csv(training_set_filename,sep='\t')
+instances_to_predict = pd.read_csv(to_predict_set_filename,sep='\t')
+
+# Extract training set features and outputs for all instances
 x = train_set.drop('group',axis=1)
 y = train_set['group']
 
@@ -138,6 +142,7 @@ printP("Selected Features: ",selected_features,len(selected_features))
 
 # Keep only best features
 x = x[selected_features]
+x_to_predict = instances_to_predict[selected_features]
 
 # Split data into train and test sets 
 X_train, X_test, y_train, y_test = train_test_split(x,y,test_size=0.2)
@@ -148,6 +153,7 @@ printP(y_test.value_counts())
 sc = StandardScaler()
 X_train = sc.fit_transform(X_train)
 X_test = sc.transform(X_test)
+x_to_predict = sc.transform(x_to_predict)
 
 ################################################
 ###   Setup Methods and their parameters     ###
@@ -237,15 +243,9 @@ for c in classifiers:
 
     grids.append(grid)
 
-
-instances_to_predict = pd.read_csv('A3_test_dataset.tsv',sep='\t')
-x_to_predict = instances_to_predict[selected_features]
-x_to_predict = sc.transform(x_to_predict)
-
-
+# Get best model anduse it to perform prediction 
 best_model = get_best_classifier(grids)
 predict_proba = get_grid_preditions(best_model,x_to_predict)
-
-print(predict_proba)
+printP(predict_proba)
 
 pd.DataFrame(predict_proba).to_csv("g01_predictions.txt", header=None, index=None)
