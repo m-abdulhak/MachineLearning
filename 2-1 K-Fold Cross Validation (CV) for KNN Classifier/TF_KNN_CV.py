@@ -413,7 +413,7 @@ pm = u'\u00b1'
 
 # Set to 1 to plot performace of selected distance functions and number of neighbors
 # Currently only works for 2 distance functions
-plotOutput = 1
+plotOutput = 0
 
 # get file names of inputs and outputs files
 inputsFileName, outputsFileName = getFileNamesFromArguments()
@@ -430,10 +430,10 @@ dataset = getTrainingSet(inputsFileName,outputsFileName)
 Nexp = 3
 
 # Set the number of folds to divide training data into (v is the k in k-fold)
-V = 5
+V = 10
 
 # Set the range of K (as in K-nearest neighbor) to perform k-fold on
-kRange = range(1,25)
+kRange = range(3,11)
 
 # Define Distance Functions
 distFuncs = [calcDistance,calcSpecialDistance]
