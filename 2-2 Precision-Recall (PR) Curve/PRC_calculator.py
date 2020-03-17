@@ -6,7 +6,6 @@ from scipy.stats import spearmanr
 import random
 import math
 from operator import itemgetter
-import matplotlib.pyplot as plt
 
 ######################
 ### Handling files ###

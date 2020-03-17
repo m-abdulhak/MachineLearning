@@ -233,6 +233,7 @@ for c in classifiers:
     average_precision = average_precision_score(y_test, y_score)
     disp = plot_precision_recall_curve(grid, X_test, y_test)
     disp.ax_.set_title('2-class Precision-Recall curve: AP={0:0.8f}'.format(average_precision))
+    plt.savefig("{}-PRC.png".format(str(type(grid.estimator)).split('.')[1]))
 
     grids.append(grid)
 
