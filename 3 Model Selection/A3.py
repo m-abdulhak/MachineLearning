@@ -51,7 +51,7 @@ def getFileNamesFromArguments():
     return str(sys.argv[1]), str(sys.argv[2])
 
 def select_best_features(x,y,p_value_threshold):
-    """ Returns a list of the best features that acgieve a p_value <= p_value_threshold 
+    """ Returns a list of the best features that achieve a p_value <= p_value_threshold 
         using Backward Elimination of features """
 
     features = list(x.columns)
@@ -190,8 +190,8 @@ selected_features = select_best_features(x,y,p_threshold)
 printP("Selected Features: ",selected_features,len(selected_features))
 
 # Keep only best features
-#x = x[selected_features]
-#x_to_predict = instances_to_predict[selected_features]
+x = x[selected_features]
+x_to_predict = instances_to_predict[selected_features]
 
 # Split data into train and test sets 
 X_train, X_test, y_train, y_test = train_test_split(x,y,test_size=0.2)
@@ -199,10 +199,10 @@ printP("Split Data, training data counts:")
 printP(y_test.value_counts())
 
 # Scale features
-#sc = StandardScaler()
-#X_train = sc.fit_transform(X_train)
-#X_test = sc.transform(X_test)
-#x_to_predict = sc.transform(x_to_predict)
+sc = StandardScaler()
+X_train = sc.fit_transform(X_train)
+X_test = sc.transform(X_test)
+x_to_predict = sc.transform(x_to_predict)
 
 ################################################
 ###   Setup Methods and their parameters     ###
@@ -212,10 +212,9 @@ printP(y_test.value_counts())
 # ‘linear’, ‘poly’, ‘rbf’, ‘sigmoid’, ‘precomputed’ 
 classifier_svc = svm.SVC(probability=True)
 params_grid_svc = [
-    {'C': [.1, 1], 'kernel': ['linear']},
-    #{'C': [.1, 1, 10, 100], 'kernel': ['linear']},
-    #{'C': [.1, 1, 10], 'degree': [2, 3, 4], 'kernel': ['poly']},
-    #{'C': [.1, 1, 10, 100], 'gamma': [0.001, 0.0001], 'kernel': ['rbf', 'sigmoid']},
+    {'C': [.1, 1, 10, 100], 'kernel': ['linear']},
+    {'C': [.1, 1, 10], 'degree': [2, 3, 4], 'kernel': ['poly']},
+    {'C': [.1, 1, 10, 100], 'gamma': [0.001, 0.0001], 'kernel': ['rbf', 'sigmoid']},
  ]
 
 # Random Forests
@@ -238,9 +237,9 @@ params_grid_nn = {
 }
 
 classifiers = [
-  {'classifier': classifier_svc, 'params': params_grid_svc, 'type': 'grid', 'name': "SVM"}#,
-  #{'classifier': classifier_rf, 'params': params_grid_rf, 'type': 'grid', 'name': "Random Forests"},
-  #{'classifier': classifier_nn, 'params': params_grid_nn, 'type': 'random', 'name': "Neural Network"}
+  {'classifier': classifier_svc, 'params': params_grid_svc, 'type': 'grid', 'name': "SVM"},
+  {'classifier': classifier_rf, 'params': params_grid_rf, 'type': 'grid', 'name': "Random Forests"},
+  {'classifier': classifier_nn, 'params': params_grid_nn, 'type': 'random', 'name': "Neural Network"}
 ]
 
 names = []
