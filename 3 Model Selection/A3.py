@@ -6,6 +6,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn import svm
 from sklearn.neural_network import MLPClassifier
+from sklearn.ensemble import VotingClassifier
 from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
@@ -31,7 +32,10 @@ from sklearn.linear_model import RidgeCV, LassoCV, Ridge, Lasso
 print_progress = True
 
 # Set to True to plot performace of best models
-plot_output = True
+generate_performance_metrics = True
+
+# Use voting classifier
+use_voting_classifier = False
 
 #############################
 ###   Helper Functions    ###
@@ -72,7 +76,7 @@ def select_best_features(x,y,p_value_threshold):
     return features
 
 def get_hidden_layer_sizes_param():
-    hidden_layers_count = [2,3,10,50]
+    hidden_layers_count = [2,3,10,20]
     neuron_counts = [2,8,16,32]
     hidden_layer_sizes = []
 
@@ -110,14 +114,14 @@ def get_grid_preditions(grid,x):
 
 
 # Best Predictions
-def get_best_classifier(grids):
-    best_model = grids[0]
+def get_best_classifier(classifiers):
+    best_model = classifiers[0]
 
-    for c in grids:
-        if(c.best_score_ > best_model.best_score_):
+    for c in classifiers:
+        if(c['score'] > best_model['score']):
             best_model = c
 
-    return best_model
+    return best_model['grid']
 
 def generate_perf_table(classifiers):
     names = []
@@ -128,7 +132,7 @@ def generate_perf_table(classifiers):
     performance_table.append(['============================='])
     performance_table.append(['Best Model Per ML Method:'])
     performance_table.append(['============================='])
-    performance_table.append(['Method','Mean','STD','Prameters'])
+    performance_table.append(['Method','Mean','STD','Parameters'])
 
     for c in classifiers:
         #name = str(type(g.estimator)).split('.')[1]
@@ -186,8 +190,8 @@ selected_features = select_best_features(x,y,p_threshold)
 printP("Selected Features: ",selected_features,len(selected_features))
 
 # Keep only best features
-x = x[selected_features]
-x_to_predict = instances_to_predict[selected_features]
+#x = x[selected_features]
+#x_to_predict = instances_to_predict[selected_features]
 
 # Split data into train and test sets 
 X_train, X_test, y_train, y_test = train_test_split(x,y,test_size=0.2)
@@ -195,10 +199,10 @@ printP("Split Data, training data counts:")
 printP(y_test.value_counts())
 
 # Scale features
-sc = StandardScaler()
-X_train = sc.fit_transform(X_train)
-X_test = sc.transform(X_test)
-x_to_predict = sc.transform(x_to_predict)
+#sc = StandardScaler()
+#X_train = sc.fit_transform(X_train)
+#X_test = sc.transform(X_test)
+#x_to_predict = sc.transform(x_to_predict)
 
 ################################################
 ###   Setup Methods and their parameters     ###
@@ -206,11 +210,12 @@ x_to_predict = sc.transform(x_to_predict)
 
 # SVC
 # ‘linear’, ‘poly’, ‘rbf’, ‘sigmoid’, ‘precomputed’ 
-classifier_svc = svm.SVC()
+classifier_svc = svm.SVC(probability=True)
 params_grid_svc = [
-  {'C': [.1, 1, 10, 100], 'kernel': ['linear']},
-  {'C': [.1, 1, 10], 'degree': [2, 3, 4], 'kernel': ['poly']},
-  {'C': [.1, 1, 10, 100], 'gamma': [0.001, 0.0001], 'kernel': ['rbf', 'sigmoid']},
+    {'C': [.1, 1], 'kernel': ['linear']},
+    #{'C': [.1, 1, 10, 100], 'kernel': ['linear']},
+    #{'C': [.1, 1, 10], 'degree': [2, 3, 4], 'kernel': ['poly']},
+    #{'C': [.1, 1, 10, 100], 'gamma': [0.001, 0.0001], 'kernel': ['rbf', 'sigmoid']},
  ]
 
 # Random Forests
@@ -233,60 +238,117 @@ params_grid_nn = {
 }
 
 classifiers = [
-  {'classifier': classifier_svc, 'params': params_grid_svc, 'type': 'grid', 'name': "SVM"},
-  {'classifier': classifier_rf, 'params': params_grid_rf, 'type': 'grid', 'name': "Random Forests"},
-  {'classifier': classifier_nn, 'params': params_grid_nn, 'type': 'random', 'name': "Neural Network"}
+  {'classifier': classifier_svc, 'params': params_grid_svc, 'type': 'grid', 'name': "SVM"}#,
+  #{'classifier': classifier_rf, 'params': params_grid_rf, 'type': 'grid', 'name': "Random Forests"},
+  #{'classifier': classifier_nn, 'params': params_grid_nn, 'type': 'random', 'name': "Neural Network"}
 ]
 
-grids = []
 names = []
 
-for c in classifiers:
-    classifier = c['classifier']
-    params = c['params']
-    search_type = c['type']
-    grid = None
+if(use_voting_classifier == False):
+    for c in classifiers:
+        classifier = c['classifier']
+        params = c['params']
+        search_type = c['type']
+        grid = None
 
-    if(search_type == 'grid'):
-        # Grid Search Cross Validation
-        grid = GridSearchCV(estimator=classifier, param_grid=params, scoring='average_precision', n_jobs=-1)
-    else:
-        grid = RandomizedSearchCV(estimator=classifier, param_distributions=params, scoring='average_precision', n_jobs=-1, n_iter=100)
+        if(search_type == 'grid'):
+            # Grid Search Cross Validation
+            grid = GridSearchCV(estimator=classifier, param_grid=params, scoring='average_precision', n_jobs=-1)
+        else:
+            grid = RandomizedSearchCV(estimator=classifier, param_distributions=params, scoring='average_precision', n_jobs=-1, n_iter=500)
 
-    # Do search
-    grid.fit(X_train, y_train)
+        # Do search
+        grid.fit(X_train, y_train)
+
+        # Summarize the results of the grid search
+        print_search_summary(grid)
+
+        # Test Performance
+        y_score = get_grid_preditions(grid,X_test)
+        y_predict = grid.predict(X_test)
+        printP(np.vstack((y_score[1:10], y_predict[1:10])).T)
+
+        # Model Performance
+        printP(classification_report(y_test,y_predict))
+        printP(confusion_matrix(y_test,y_predict))
+        tn, fp, fn, tp = confusion_matrix(y_test,y_predict).ravel()
+        printP('TP={}\tFP={}'.format(tp,fp))
+        printP('FN={}\tTN={}'.format(fn,tn))
+
+        average_precision = average_precision_score(y_test, y_score)
+        if(generate_performance_metrics):
+            disp = plot_precision_recall_curve(grid, X_test, y_test)
+            disp.ax_.set_title('Precision-Recall curve: AP={0:0.8f}'.format(average_precision))
+            plt.savefig("{}-PRC.png".format(c['name']))
+
+        c['grid'] = grid
+        c['score'] = average_precision
+
+    # Generate best models performance measurements table
+    if(generate_performance_metrics):
+        generate_perf_table(classifiers)
+
+    # Get best model and use it to perform prediction 
+    best_model = get_best_classifier(classifiers)
+    predict_proba = get_grid_preditions(best_model,x_to_predict)
+    printP(predict_proba)
+
+    pd.DataFrame(predict_proba).to_csv("g01_predictions.txt", header=None, index=None)
+
+else:
+    #VotingClassifier 
+    eclf = VotingClassifier(
+            estimators=[('svc', classifier_svc), ('rf', classifier_rf), ('nn', classifier_nn)],
+            voting='soft')
+
+    params = {
+        'svc__C': [.1, 1, 10, 100], 'svc__degree': [2, 3, 4], 'svc__gamma': [0.001, 0.0001], 'svc__kernel': ['linear','poly', 'rbf', 'sigmoid'],
+        'rf__n_estimators': [200, 500, 1000], 'rf__max_features': ['auto', 'sqrt', 'log2'], 'rf__max_depth' : [4,5,6,7,8], 'rf__criterion' :['gini', 'entropy'],
+        'nn__hidden_layer_sizes': get_hidden_layer_sizes_param(), 'nn__activation': ['identity', 'logistic', 'tanh', 'relu'], 'nn__solver': ['lbfgs', 'sgd', 'adam'], 
+        'nn__alpha' : [0.1, 0.01, 0.001, 0.0001, 0.0001], 'nn__learning_rate': ['constant', 'invscaling', 'adaptive']    
+    }
+
+    classifiers = [
+      {'classifier': VotingClassifier, 'params': params, 'type': 'random', 'name': 'Voting'}
+    ]
+
+    # Randomized Grid Search Cross Validation
+    grid_eclf = RandomizedSearchCV(estimator=eclf, param_distributions=params, scoring='average_precision', n_jobs=-1, n_iter=1)
+    grid_eclf.fit(X_train, y_train)
+    classifiers[0]['grid'] = grid_eclf
+
 
     # Summarize the results of the grid search
-    print_search_summary(grid)
+    print_search_summary(grid_eclf)
 
     # Test Performance
-    y_score = get_grid_preditions(grid,X_test)
-    y_predict = grid.predict(X_test)
-    printP(np.vstack((y_score[1:10], y_predict[1:10])).T)
+    y_score_eclf = grid_eclf.predict_proba(X_test)[:,1]
+    y_predict_eclf = grid_eclf.predict(X_test)
+    printP(np.vstack((y_score_eclf[1:10], y_predict_eclf[1:10])).T)
 
     # Model Performance
-    printP(classification_report(y_test,y_predict))
-    printP(confusion_matrix(y_test,y_predict))
-    tn, fp, fn, tp = confusion_matrix(y_test,y_predict).ravel()
+    printP(classification_report(y_test,y_predict_eclf))
+    printP(confusion_matrix(y_test,y_predict_eclf))
+    tn, fp, fn, tp = confusion_matrix(y_test,y_predict_eclf).ravel()
     printP('TP={}\tFP={}'.format(tp,fp))
     printP('FN={}\tTN={}'.format(fn,tn))
 
-    if(plot_output):
-        average_precision = average_precision_score(y_test, y_score)
-        disp = plot_precision_recall_curve(grid, X_test, y_test)
-        disp.ax_.set_title('2-class Precision-Recall curve: AP={0:0.8f}'.format(average_precision))
-        plt.savefig("{}-PRC.png".format(c['name']))
+    average_precision = average_precision_score(y_test, y_score_eclf)
+    if(generate_performance_metrics):
+        disp = plot_precision_recall_curve(grid_eclf, X_test, y_test)
+        disp.ax_.set_title('Precision-Recall curve: AP={0:0.8f}'.format(average_precision))
+        plt.savefig("{}-PRC.png".format(classifiers[0]['name']))
 
-    grids.append(grid)
-    c['grid']=grid
+    # Generate best models performance measurements table
+    if(generate_performance_metrics):
+        generate_perf_table(classifiers)
 
-# Generate best models performance measurements table
-if(plot_output):
-    generate_perf_table(classifiers)
+    # Get best model and use it to perform prediction 
+    best_model = classifiers[0]['grid']
 
-# Get best model and use it to perform prediction 
-best_model = get_best_classifier(grids)
-predict_proba = get_grid_preditions(best_model,x_to_predict)
-printP(predict_proba)
+    predict_proba = get_grid_preditions(best_model,x_to_predict)
+    printP(predict_proba)
 
-pd.DataFrame(predict_proba).to_csv("g01_predictions.txt", header=None, index=None)
+    pd.DataFrame(predict_proba).to_csv("g01_predictions.txt", header=None, index=None)
+
